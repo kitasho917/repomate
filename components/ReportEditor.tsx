@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { AiAssistPanel } from "@/components/AiAssistPanel";
-import { applyAiEdit } from "@/lib/ai";
+import { reviseReportWithInstruction } from "@/lib/ai";
 import { getReportById, upsertReport } from "@/lib/storage";
 import { Report } from "@/lib/types";
 
 export function ReportEditor({ id }: { id: string }) {
   const [report, setReport] = useState<Report | null>(null);
   const [message, setMessage] = useState("");
+  const [suggestion, setSuggestion] = useState("");
 
   useEffect(() => {
     const data = getReportById(id);
@@ -31,8 +32,21 @@ export function ReportEditor({ id }: { id: string }) {
     setMessage("本文をコピーしました");
   };
 
-  const onAiEdit = (mode: string) => {
-    setReport({ ...report, generatedBody: applyAiEdit(report.generatedBody, mode) });
+  const onRequestRevision = async (instruction: string) => {
+    const revised = await reviseReportWithInstruction(
+      report.generatedBody,
+      instruction
+    );
+    setSuggestion(revised);
+    setMessage("AI修正案を作成しました");
+    return revised;
+  };
+
+  const onApplySuggestion = () => {
+    if (!suggestion) return;
+
+    setReport({ ...report, generatedBody: suggestion });
+    setMessage("修正案を本文に反映しました。必要に応じて保存してください。");
   };
 
   return (
@@ -44,12 +58,16 @@ export function ReportEditor({ id }: { id: string }) {
           value={report.title}
           onChange={(e) => setReport({ ...report, title: e.target.value })}
         />
+
         <label className="mt-3 block text-sm font-medium">本文エディタ</label>
         <textarea
           className="textarea mt-1 min-h-[420px]"
           value={report.generatedBody}
-          onChange={(e) => setReport({ ...report, generatedBody: e.target.value })}
+          onChange={(e) =>
+            setReport({ ...report, generatedBody: e.target.value })
+          }
         />
+
         <div className="mt-3 flex flex-wrap gap-2">
           <button className="btn-primary" onClick={onSave}>
             保存
@@ -58,9 +76,15 @@ export function ReportEditor({ id }: { id: string }) {
             コピーする
           </button>
         </div>
+
         {message && <p className="mt-2 text-sm text-green-700">{message}</p>}
       </section>
-      <AiAssistPanel onSelect={onAiEdit} />
+
+      <AiAssistPanel
+        onRequest={onRequestRevision}
+        onApply={onApplySuggestion}
+        suggestion={suggestion}
+      />
     </div>
   );
 }
